@@ -1,18 +1,12 @@
 @echo off
 chcp 65001 > nul
-title SimuCrypto - Mở Tunnel Kết Nối Backend Với Vercel
+title SimuCrypto - Tự Động Kết Nối Backend Local Với Vercel
 
 echo ==============================================================
-echo    SIMUCRYPTO - KẾT NỐI BACKEND LOCAL VỚI VERCEL ONLINE
+echo    SIMUCRYPTO - TỰ ĐỘNG ĐỒNG BỘ BACKEND LOCAL LÊN VERCEL
 echo ==============================================================
 echo.
-echo [1] Đang kết nối tạo đường hầm HTTPS qua OpenSSH (Serveo)...
+echo [*] Đang khởi động đường hầm HTTPS và tự động ánh xạ bằng Secret Key...
 echo.
-echo * CHÚ Ý: Đường dẫn https://....serveousercontent.com xuất hiện
-echo   bên dưới chính là link Backend Online của bạn.
-echo.
-echo * Hãy copy link đó và dán vào nút ⚙️ trên SimuCryto AI tại Vercel!
-echo.
-echo --------------------------------------------------------------
-ssh -o StrictHostKeyChecking=no -R 80:localhost:5001 serveo.net
+node sync-tunnel.js
 pause

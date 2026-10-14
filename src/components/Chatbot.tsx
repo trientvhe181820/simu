@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Send, Bot, Minimize2, AlertCircle, Settings, Check } from 'lucide-react';
+import { X, Send, Bot, Minimize2, AlertCircle } from 'lucide-react';
 
-import { getApiUrl } from '../lib/api';
+import { resolveApiUrl } from '../lib/api';
 
 interface Message {
   id: number;
@@ -16,7 +16,7 @@ interface Message {
  * Tries the streaming endpoint first; falls back to the regular endpoint.
  */
 async function fetchBotReply(userMessage: string): Promise<string> {
-  const API_BASE = getApiUrl();
+  const API_BASE = await resolveApiUrl();
   const headers = {
     'Content-Type': 'application/json',
     'Bypass-Tunnel-Reminder': 'true',
@@ -71,20 +71,13 @@ async function fetchBotReply(userMessage: string): Promise<string> {
     const data = await res.json();
     return data.reply || 'Không nhận được phản hồi từ server.';
   } catch {
-    const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
-    const msg = isVercel && !API_BASE
-      ? 'Chưa kết nối Backend AI. Hãy bấm nút ⚙️ góc trên để nhập URL tunnel local hoặc mở http://localhost:80!'
-      : 'Không thể kết nối đến server AI. Vui lòng kiểm tra lại kết nối backend.';
-    throw new Error(msg);
+    throw new Error('Không thể kết nối đến server AI. Vui lòng đảm bảo Backend đang chạy.');
   }
 }
 
 export function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
-  const [customApiUrl, setCustomApiUrl] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('CUSTOM_API_URL') || '' : ''));
-  const [savedSuccess, setSavedSuccess] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -97,20 +90,6 @@ export function Chatbot() {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleSaveApiUrl = () => {
-    const trimmed = customApiUrl.trim();
-    if (trimmed) {
-      localStorage.setItem('CUSTOM_API_URL', trimmed);
-    } else {
-      localStorage.removeItem('CUSTOM_API_URL');
-    }
-    setSavedSuccess(true);
-    setTimeout(() => {
-      setSavedSuccess(false);
-      setShowConfig(false);
-    }, 1200);
-  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -180,9 +159,8 @@ export function Chatbot() {
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 flex flex-col rounded-2xl shadow-2xl transition-all ${
-        isMinimized ? 'h-16 w-80' : 'h-[600px] w-96'
-      }`}
+      className={`fixed bottom-6 right-6 z-50 flex flex-col rounded-2xl shadow-2xl transition-all ${isMinimized ? 'h-16 w-80' : 'h-[600px] w-96'
+        }`}
       style={{
         background: 'var(--card)',
         border: '1px solid var(--border)',
@@ -208,13 +186,6 @@ export function Chatbot() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowConfig(!showConfig)}
-            title="Cấu hình Backend API (Local Tunnel / Cloud)"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-black transition-colors hover:bg-black/10"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
-          <button
             onClick={() => setIsMinimized(!isMinimized)}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-black transition-colors hover:bg-black/10"
           >
@@ -228,33 +199,6 @@ export function Chatbot() {
           </button>
         </div>
       </div>
-
-      {showConfig && !isMinimized && (
-        <div className="p-3 border-b text-xs space-y-2 bg-blue-50/10 backdrop-blur" style={{ borderColor: 'var(--border)' }}>
-          <div className="flex items-center justify-between font-semibold text-foreground">
-            <span>⚙️ Kết nối Backend (API URL)</span>
-            {savedSuccess && <span className="text-emerald-500 flex items-center gap-1 font-bold"><Check size={12} /> Đã lưu!</span>}
-          </div>
-          <p className="text-muted-foreground text-[11px] leading-relaxed">
-            Dán đường dẫn HTTPS Tunnel từ máy bạn (ví dụ link Serveo/Localtunnel) hoặc link deploy Render/Railway.
-          </p>
-          <div className="flex gap-1.5">
-            <input
-              type="text"
-              value={customApiUrl}
-              onChange={(e) => setCustomApiUrl(e.target.value)}
-              placeholder="VD: https://xxxx.serveousercontent.com"
-              className="flex-1 px-2.5 py-1.5 rounded-lg border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <button
-              onClick={handleSaveApiUrl}
-              className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity"
-            >
-              Lưu
-            </button>
-          </div>
-        </div>
-      )}
 
       {!isMinimized && (
         <>
@@ -280,14 +224,8 @@ export function Chatbot() {
                     }}
                   >
                     {message.isError && (
-                      <div className="flex items-center justify-between gap-1 mb-1" style={{ color: '#ef4444', fontSize: 11, fontWeight: 600 }}>
-                        <span className="flex items-center gap-1"><AlertCircle size={12} /> Lỗi kết nối</span>
-                        <button
-                          onClick={() => setShowConfig(true)}
-                          className="underline text-[11px] text-blue-500 hover:text-blue-400"
-                        >
-                          Cấu hình URL
-                        </button>
+                      <div className="flex items-center gap-1 mb-1" style={{ color: '#ef4444', fontSize: 11, fontWeight: 600 }}>
+                        <AlertCircle size={12} /> Lỗi kết nối
                       </div>
                     )}
                     <p className="whitespace-pre-wrap text-sm">{message.text}</p>

@@ -63,10 +63,9 @@ async function main() {
     const loginDelay = Math.random() * (END_DATE - createdAt.getTime());
     const lastLoginAt = new Date(createdAt.getTime() + loginDelay);
 
-    // Khoảng 15% là tài khoản Pro (khoảng 6 users)
-    const isPro = Math.random() < 0.16;
-    const role = isPro ? 1 : 0;
-    const proExpiryDate = isPro ? new Date(createdAt.getTime() + 30 * 24 * 60 * 60 * 1000) : null;
+    const isPro = false;
+    const role = 0;
+    const proExpiryDate = null;
 
     const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff&size=128`;
 
@@ -128,24 +127,6 @@ async function main() {
       });
     }
 
-    // Nếu là user VIP, tạo bản ghi thanh toán VietQR
-    if (isPro) {
-      const months = randomElement([1, 3, 6]);
-      const amount = months === 1 ? 49000 : months === 3 ? 129000 : 229000;
-      await prisma.paymentHistory.create({
-        data: {
-          userId: user.id,
-          amount,
-          currency: 'VND',
-          months,
-          memo: `SIMUPRO_${tag}_${months}M`,
-          method: 'VietQR',
-          status: 'SUCCESS',
-          createdAt: new Date(createdAt.getTime() + 15 * 60 * 1000), // 15 phút sau khi đăng ký
-        }
-      });
-    }
-
     // Tạo hoạt động người dùng
     await prisma.userActivity.create({
       data: {
@@ -155,17 +136,6 @@ async function main() {
         createdAt,
       }
     });
-
-    if (isPro) {
-      await prisma.userActivity.create({
-        data: {
-          userId: user.id,
-          action: 'Nâng cấp VIP',
-          details: 'Kích hoạt gói Pro thành viên VIP thành công qua VietQR',
-          createdAt: new Date(createdAt.getTime() + 15 * 60 * 1000),
-        }
-      });
-    }
 
     console.log(`[${i + 1}/38] Đã tạo: ${displayName} (${email}) - Ngày tạo: ${createdAt.toLocaleDateString('vi-VN')} ${createdAt.toLocaleTimeString('vi-VN')} - VIP: ${isPro ? 'Có ⭐' : 'Free'}`);
   }

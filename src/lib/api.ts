@@ -9,17 +9,12 @@ export async function resolveApiUrl(forceRefresh = false): Promise<string> {
     return '';
   }
 
-  // 2. Biến môi trường VITE_API_URL (nếu có cấu hình cố định trên Vercel)
-  if (import.meta.env.VITE_API_URL) {
-    return (import.meta.env.VITE_API_URL as string).replace(/\/$/, '');
-  }
-
-  // 3. Bộ nhớ cache ngắn hạn (TTL 20s)
+  // 2. Bộ nhớ cache ngắn hạn (TTL 20s)
   if (!forceRefresh && cachedApiUrl && Date.now() - lastFetchTime < 20000) {
     return cachedApiUrl;
   }
 
-  // 4. Tự động lấy URL BE mới nhất từ Cloud Registry bằng Mapping Key
+  // 3. Tự động lấy URL BE mới nhất từ Cloud Registry bằng Mapping Key
   if (resolvingPromise && !forceRefresh) return resolvingPromise;
 
   resolvingPromise = (async () => {
@@ -39,6 +34,13 @@ export async function resolveApiUrl(forceRefresh = false): Promise<string> {
     } finally {
       resolvingPromise = null;
     }
+
+    // Fallback: nếu Cloud Key chưa có thì mới dùng biến môi trường VITE_API_URL (nếu có)
+    const envUrl = (import.meta.env.VITE_API_URL as string || '').replace(/\/$/, '');
+    if (envUrl && !envUrl.includes('loca.lt')) {
+      return envUrl;
+    }
+
     return cachedApiUrl || '';
   })();
 

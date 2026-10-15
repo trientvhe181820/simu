@@ -1,32 +1,26 @@
 const MAPPING_OBJECT_ID = 'ff808181a09d98f701a13bed8e9761ff';
 let cachedApiUrl: string | null = null;
+let lastFetchTime = 0;
 let resolvingPromise: Promise<string> | null = null;
 
-export async function resolveApiUrl(): Promise<string> {
+export async function resolveApiUrl(forceRefresh = false): Promise<string> {
   // 1. Môi trường local (localhost) -> dùng proxy trực tiếp ''
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return '';
   }
 
-  // 2. Biến môi trường VITE_API_URL (nếu có)
+  // 2. Biến môi trường VITE_API_URL (nếu có cấu hình cố định trên Vercel)
   if (import.meta.env.VITE_API_URL) {
     return (import.meta.env.VITE_API_URL as string).replace(/\/$/, '');
   }
 
-  // 3. Bộ nhớ cache
-  if (cachedApiUrl) return cachedApiUrl;
-
-  // 4. SessionStorage
-  if (typeof window !== 'undefined') {
-    const saved = sessionStorage.getItem('MAPPED_API_URL');
-    if (saved) {
-      cachedApiUrl = saved;
-      return saved;
-    }
+  // 3. Bộ nhớ cache ngắn hạn (TTL 20s)
+  if (!forceRefresh && cachedApiUrl && Date.now() - lastFetchTime < 20000) {
+    return cachedApiUrl;
   }
 
-  // 5. Tự động lấy URL BE đã map từ Cloud Registry bằng Mapping Key
-  if (resolvingPromise) return resolvingPromise;
+  // 4. Tự động lấy URL BE mới nhất từ Cloud Registry bằng Mapping Key
+  if (resolvingPromise && !forceRefresh) return resolvingPromise;
 
   resolvingPromise = (async () => {
     try {
@@ -36,18 +30,16 @@ export async function resolveApiUrl(): Promise<string> {
         if (json?.data?.url) {
           const mapped = json.data.url.replace(/\/$/, '');
           cachedApiUrl = mapped;
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem('MAPPED_API_URL', mapped);
-          }
+          lastFetchTime = Date.now();
           return mapped;
         }
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('⚠️ Lỗi kết nối cloud mapping:', err);
     } finally {
       resolvingPromise = null;
     }
-    return '';
+    return cachedApiUrl || '';
   })();
 
   return resolvingPromise;
@@ -57,19 +49,11 @@ export function getApiUrl(): string {
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return '';
   }
-  if (cachedApiUrl) return cachedApiUrl;
-  if (typeof window !== 'undefined') {
-    const saved = sessionStorage.getItem('MAPPED_API_URL');
-    if (saved) {
-      cachedApiUrl = saved;
-      return saved;
-    }
-  }
-  return (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+  return cachedApiUrl || (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 }
 
 export async function apiRequest(endpoint: string, method: string = 'GET', body?: any) {
-  const apiUrl = await resolveApiUrl();
+  let apiUrl = await resolveApiUrl();
   const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
 
   // Nếu trên môi trường Vercel static mà chưa map được backend API, bỏ qua polling thanh toán ngầm
@@ -89,7 +73,29 @@ export async function apiRequest(endpoint: string, method: string = 'GET', body?
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${apiUrl}${endpoint}`, options);
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}${endpoint}`, options);
+    // Nếu gặp lỗi gateway 502/504 hoặc 404, thử lấy URL mới từ registry và retry 1 lần
+    if ((response.status === 502 || response.status === 504 || response.status === 404) && isVercel) {
+      apiUrl = await resolveApiUrl(true);
+      if (apiUrl) {
+        response = await fetch(`${apiUrl}${endpoint}`, options);
+      }
+    }
+  } catch (err) {
+    // Nếu mạng bị ngắt do URL cũ đổi, tự động refresh URL từ registry và retry
+    if (isVercel) {
+      apiUrl = await resolveApiUrl(true);
+      if (apiUrl) {
+        response = await fetch(`${apiUrl}${endpoint}`, options);
+      } else {
+        throw err;
+      }
+    } else {
+      throw err;
+    }
+  }
   
   // Kiểm tra Content-Type tránh lỗi Unexpected token '<' khi response là HTML 404/405
   const contentType = response.headers.get('content-type');

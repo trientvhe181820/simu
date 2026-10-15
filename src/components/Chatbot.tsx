@@ -71,6 +71,23 @@ async function fetchBotReply(userMessage: string): Promise<string> {
     const data = await res.json();
     return data.reply || 'Không nhận được phản hồi từ server.';
   } catch {
+    // Retry với URL mới nhất từ Cloud Key nếu lần đầu thất bại
+    try {
+      const newApiBase = await resolveApiUrl(true);
+      if (newApiBase) {
+        const retryRes = await fetch(`${newApiBase}/chat`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ message: userMessage }),
+        });
+        if (retryRes.ok) {
+          const data = await retryRes.json();
+          return data.reply || 'Không nhận được phản hồi từ server.';
+        }
+      }
+    } catch {
+      // ignore retry error
+    }
     throw new Error('Không thể kết nối đến server AI. Vui lòng đảm bảo Backend đang chạy.');
   }
 }

@@ -15,6 +15,20 @@ export class BinanceService {
         'Content-Type': 'application/json',
       },
     });
+
+    // Tự động chuyển sang api.binance.us nếu server đặt tại Mỹ và gặp mã 451 (Restricted Location)
+    this.http.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const config = error.config;
+        if (error.response?.status === 451 && !config._isRetry) {
+          config._isRetry = true;
+          config.baseURL = 'https://api.binance.us';
+          return axios(config);
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
   // 🔹 Chuẩn hóa symbol
@@ -113,18 +127,39 @@ export class BinanceService {
   }
 
   async getAvailableCoins(): Promise<string[]> {
+    const urls = [
+      'https://api.binance.com/api/v3/exchangeInfo',
+      'https://api.binance.us/api/v3/exchangeInfo',
+    ];
 
-    const res = await axios.get('https://api.binance.com/api/v3/exchangeInfo');
+    for (const url of urls) {
+      try {
+        const res = await axios.get(url, { timeout: 4000 });
+        if (res?.data?.symbols) {
+          const symbols = res.data.symbols;
+          const coins: string[] = symbols
+            .filter((s: any) => s.quoteAsset === 'USDT' || s.quoteAsset === 'USD')
+            .map((s: any) => s.baseAsset);
 
-    const symbols = res.data.symbols;
+          const uniqueCoins = Array.from(new Set<string>(coins));
+          if (uniqueCoins.length > 0) {
+            return uniqueCoins;
+          }
+        }
+      } catch (e: any) {
+        // Thử URL tiếp theo nếu bị giới hạn địa lý
+      }
+    }
 
-    const coins: string[] = symbols
-      .filter((s: any) => s.quoteAsset === 'USDT')
-      .map((s: any) => s.baseAsset);
-
-    const uniqueCoins = Array.from(new Set<string>(coins));
-
-    return uniqueCoins;
-
+    // Danh sách dự phòng các đồng tiền điện tử phổ biến nhất nếu server ở trung tâm dữ liệu bị hạn chế
+    return [
+      'BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'DOGE', 'ADA', 'AVAX', 'LINK', 'SUI',
+      'PEPE', 'SHIB', 'NEAR', 'APT', 'DOT', 'MATIC', 'POL', 'LTC', 'TRX', 'UNI',
+      'ATOM', 'XLM', 'FIL', 'ICP', 'RENDER', 'FET', 'TAO', 'INJ', 'TIA', 'SEI',
+      'ARB', 'OP', 'RUNE', 'FTM', 'AAVE', 'MKR', 'GRT', 'SAND', 'MANA', 'AXS',
+      'GALA', 'FLOW', 'CHZ', 'ALGO', 'QNT', 'THETA', 'KAVA', 'DYDX', 'EOS', 'NEO',
+      'XTZ', 'KLAY', 'IOTA', 'EGLD', 'CRV', 'LDO', 'BLUR', 'JTO', 'PYTH', 'WIF',
+      'BONK', 'FLOKI', 'ORDI', 'SATS', 'BOME', 'ENA', 'W', 'STRK', 'TNSR', 'IO'
+    ];
   }
 }

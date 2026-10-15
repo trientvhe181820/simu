@@ -8,7 +8,11 @@ import { BinanceService } from './binance/binance.service';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const binanceService = app.get(BinanceService);
-  await loadBinanceSymbols(binanceService);
+  try {
+    await loadBinanceSymbols(binanceService);
+  } catch (err: any) {
+    console.warn('⚠️ [Binance Init] Không thể tải danh sách coin trực tiếp, sử dụng danh sách fallback:', err?.message || err);
+  }
   app.enableCors({
     origin: true, // Cho phép tất cả origin kể cả Vercel và localhost với credentials
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',

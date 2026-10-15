@@ -163,11 +163,17 @@ export class TradingService {
     });
 
     // 2. Fetch current prices
-    const pricesData = await this.binanceService.getAllTickers();
     const priceMap = new Map<string, number>();
-    pricesData.forEach((p: any) => {
-      priceMap.set(p.symbol, parseFloat(p.price));
-    });
+    try {
+      const pricesData = await this.binanceService.getAllTickers();
+      if (Array.isArray(pricesData)) {
+        pricesData.forEach((p: any) => {
+          priceMap.set(p.symbol, parseFloat(p.price));
+        });
+      }
+    } catch (e: any) {
+      console.warn('⚠️ Could not fetch prices for leaderboard, using zero valuation fallback');
+    }
 
     // 3. Calculate total value for each account
     const leaderboard = accounts.map((acc) => {

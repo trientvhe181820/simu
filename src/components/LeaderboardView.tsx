@@ -52,7 +52,9 @@ export function LeaderboardView({ onBack }: LeaderboardViewProps) {
     const fetchLeaderboard = async () => {
       try {
         const data = await tradingApi.getLeaderboard();
-        setLeaderboard(data);
+        const list = Array.isArray(data) ? data : [];
+        const filtered = list.filter((u: any) => u.role !== 999 && !u.email?.toLowerCase().includes('admin'));
+        setLeaderboard(filtered);
       } catch (error) {
         console.error('Failed to fetch leaderboard:', error);
       } finally {

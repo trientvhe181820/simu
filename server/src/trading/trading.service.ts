@@ -139,8 +139,14 @@ export class TradingService {
   }
 
   async getLeaderboard() {
-    // 1. Fetch all accounts with holdings and user info
+    // 1. Fetch all accounts with holdings and user info (Loại trừ tài khoản admin role 999)
     const accounts = await this.prisma.portfolioAccount.findMany({
+      where: {
+        user: {
+          role: { not: 999 },
+          email: { not: { contains: 'admin' } },
+        },
+      },
       include: {
         user: {
           select: {

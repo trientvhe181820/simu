@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 
 const prisma = new PrismaClient({
   datasources: {
-    db: { url: 'postgresql://postgres:123@localhost:5432/simucrypto?schema=public' }
+    db: { url: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_DOiXL9twe1Gz@ep-dark-grass-arho7d1s-pooler.c-4.us-west-2.aws.neon.tech/neondb?sslmode=require' }
   }
 });
 
